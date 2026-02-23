@@ -11,19 +11,17 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
-    setTimeout(() => {
-      const result = login(email, password);
-      if (result.success) {
-        navigate("/dashboard");
-      } else {
-        setError(result.error || "Login failed.");
-      }
-      setLoading(false);
-    }, 500);
+    const result = await login(email, password);
+    if (result.success) {
+      navigate("/dashboard");
+    } else {
+      setError(result.error || "Login failed.");
+    }
+    setLoading(false);
   };
 
   return (
@@ -46,36 +44,23 @@ const Login = () => {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="mb-1.5 block text-sm font-medium text-foreground">Email</label>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={e => setEmail(e.target.value)}
+              <input type="email" required value={email} onChange={e => setEmail(e.target.value)}
                 className="w-full rounded-lg border border-border bg-input px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                placeholder="you@example.com"
-              />
+                placeholder="you@example.com" />
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium text-foreground">Password</label>
               <div className="relative">
-                <input
-                  type={showPassword ? "text" : "password"}
-                  required
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
+                <input type={showPassword ? "text" : "password"} required value={password} onChange={e => setPassword(e.target.value)}
                   className="w-full rounded-lg border border-border bg-input px-4 py-2.5 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                  placeholder="Enter your password"
-                />
+                  placeholder="Enter your password" />
                 <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
             </div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full rounded-lg bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:opacity-90 disabled:opacity-50"
-            >
+            <button type="submit" disabled={loading}
+              className="w-full rounded-lg bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:opacity-90 disabled:opacity-50">
               {loading ? "Signing in..." : "Sign In"}
             </button>
           </form>

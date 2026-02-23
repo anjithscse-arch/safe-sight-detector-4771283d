@@ -1,6 +1,7 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { getCurrentUser, logout } from "@/lib/auth";
+import { useAuth } from "@/hooks/useAuth";
+import { logout } from "@/lib/auth";
 import { runDummyPrediction, type PredictionResult } from "@/lib/prediction";
 import { generateReport } from "@/lib/report";
 import { Shield, Upload, LogOut, FileText, AlertTriangle, CheckCircle, XCircle, Image as ImageIcon } from "lucide-react";
@@ -9,60 +10,46 @@ const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/jpg"];
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const user = getCurrentUser();
+  const { user, loading } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [result, setResult] = useState<PredictionResult | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [dragOver, setDragOver] = useState(false);
 
-  useEffect(() => {
-    if (!user) navigate("/login");
-  }, [user, navigate]);
+  if (loading) return <div className="flex min-h-screen items-center justify-center bg-background"><div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>;
+  if (!user) { navigate("/login"); return null; }
 
-  const handleFile = useCallback((f: File) => {
-    if (!ACCEPTED_TYPES.includes(f.type)) {
-      alert("Please upload a JPG or PNG image only.");
-      return;
-    }
+  const handleFile = (f: File) => {
+    if (!ACCEPTED_TYPES.includes(f.type)) { alert("Please upload a JPG or PNG image only."); return; }
     setFile(f);
     setResult(null);
     const reader = new FileReader();
     reader.onload = (e) => setPreview(e.target?.result as string);
     reader.readAsDataURL(f);
-  }, []);
+  };
 
-  const onDrop = useCallback((e: React.DragEvent) => {
+  const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
     const f = e.dataTransfer.files[0];
     if (f) handleFile(f);
-  }, [handleFile]);
+  };
 
   const analyze = () => {
     setAnalyzing(true);
-    setTimeout(() => {
-      setResult(runDummyPrediction());
-      setAnalyzing(false);
-    }, 1500);
+    setTimeout(() => { setResult(runDummyPrediction()); setAnalyzing(false); }, 1500);
   };
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     navigate("/login");
   };
 
-  const clearImage = () => {
-    setFile(null);
-    setPreview(null);
-    setResult(null);
-  };
-
-  if (!user) return null;
+  const clearImage = () => { setFile(null); setPreview(null); setResult(null); };
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="border-b border-border bg-card/50 backdrop-blur-sm">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
@@ -84,7 +71,6 @@ const Dashboard = () => {
       </header>
 
       <main className="mx-auto max-w-5xl px-4 py-8">
-        {/* Welcome */}
         <div className="mb-8">
           <h2 className="text-xl font-bold text-foreground">Dashboard</h2>
           <p className="mt-1 text-sm text-muted-foreground">Upload an image to check if it has been digitally manipulated.</p>
@@ -96,7 +82,6 @@ const Dashboard = () => {
             <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground">
               <ImageIcon className="h-4 w-4 text-primary" /> Image Upload
             </h3>
-
             {!preview ? (
               <div
                 onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
@@ -144,7 +129,6 @@ const Dashboard = () => {
             <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground">
               <FileText className="h-4 w-4 text-primary" /> Analysis Results
             </h3>
-
             {!result ? (
               <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-16 text-center">
                 <Shield className="mb-3 h-10 w-10 text-muted-foreground/30" />
@@ -152,7 +136,6 @@ const Dashboard = () => {
               </div>
             ) : (
               <div className="space-y-4">
-                {/* Result Badge */}
                 <div className={`flex items-center gap-3 rounded-xl p-4 ${result.label === "Fake" ? "border border-destructive/30 bg-destructive/10 glow-destructive" : "border border-success/30 bg-success/10"}`}>
                   {result.label === "Fake" ? <XCircle className="h-6 w-6 text-destructive" /> : <CheckCircle className="h-6 w-6 text-success" />}
                   <div>
@@ -160,26 +143,19 @@ const Dashboard = () => {
                     <p className="text-xs text-muted-foreground">{result.probability}% {result.label === "Fake" ? "manipulated" : "authentic"}</p>
                   </div>
                 </div>
-
-                {/* Probability Bar */}
                 <div>
                   <div className="mb-1 flex justify-between text-xs text-muted-foreground">
-                    <span>Probability Score</span>
-                    <span>{result.probability}%</span>
+                    <span>Probability Score</span><span>{result.probability}%</span>
                   </div>
                   <div className="h-2.5 overflow-hidden rounded-full bg-secondary">
                     <div className={`h-full rounded-full transition-all duration-700 ${result.label === "Fake" ? "bg-destructive" : "bg-success"}`}
                       style={{ width: `${result.probability}%` }} />
                   </div>
                 </div>
-
-                {/* Confidence */}
                 <div className="rounded-lg border border-border bg-secondary/50 p-3">
                   <p className="mb-1 text-xs font-medium text-foreground">Confidence Explanation</p>
                   <p className="text-xs leading-relaxed text-muted-foreground">{result.confidence}</p>
                 </div>
-
-                {/* Warning */}
                 {result.label === "Fake" && (
                   <div className="rounded-xl border border-warning/30 bg-warning/10 p-4">
                     <div className="mb-2 flex items-center gap-2">
@@ -191,12 +167,9 @@ const Dashboard = () => {
                     </p>
                   </div>
                 )}
-
-                {/* Report Button */}
                 <button
                   onClick={() => generateReport(user.username, file?.name || "unknown", result)}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-primary/30 bg-primary/10 py-2.5 text-sm font-medium text-primary transition-colors hover:bg-primary/20"
-                >
+                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-primary/30 bg-primary/10 py-2.5 text-sm font-medium text-primary transition-colors hover:bg-primary/20">
                   <FileText className="h-4 w-4" /> Generate PDF Report
                 </button>
               </div>

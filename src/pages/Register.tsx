@@ -13,21 +13,19 @@ const Register = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     if (password.length < 6) { setError("Password must be at least 6 characters."); return; }
     if (password !== confirmPassword) { setError("Passwords do not match."); return; }
     setLoading(true);
-    setTimeout(() => {
-      const result = register(username, email, password);
-      if (result.success) {
-        navigate("/login");
-      } else {
-        setError(result.error || "Registration failed.");
-      }
-      setLoading(false);
-    }, 500);
+    const result = await register(username, email, password);
+    if (result.success) {
+      navigate("/login");
+    } else {
+      setError(result.error || "Registration failed.");
+    }
+    setLoading(false);
   };
 
   return (
