@@ -1,0 +1,6 @@
+flask
+Pillow
+torch
+timm
+torchvision
+flask-limiter

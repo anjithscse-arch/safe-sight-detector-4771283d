@@ -1,0 +1,11 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+database.db
+tmp_*.log
+
+safe-sight-detector-4771283d-main/node_modules/
+safe-sight-detector-4771283d-main/dist/
