@@ -1,6 +1,8 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 from PIL import Image, UnidentifiedImageError
 from pathlib import Path
+import time
 import torch
 import timm
 import torch.nn as nn
@@ -10,9 +12,16 @@ from datetime import datetime
 import uuid
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from dotenv import load_dotenv
+from detection import detection_bp
+
+load_dotenv()
 
 app = Flask(__name__)
 limiter = Limiter(key_func=get_remote_address, app=app)
+CORS(app, origins=["http://localhost:8080"])
+
+app.register_blueprint(detection_bp)
 
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png"}
 ALLOWED_MIME_TYPES = {"image/jpeg", "image/png"}
@@ -21,8 +30,8 @@ MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024
 # Load model and transforms one time at startup.
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 MODEL_PATH = Path("models/best_model.pth")
-CLASS_NAMES = ("Real", "Fake")
 DB_PATH = Path("database.db")
+print(f"[INFO] Using device: {DEVICE}")
 
 
 class DeepfakeEfficientNet(nn.Module):
@@ -43,6 +52,7 @@ class DeepfakeEfficientNet(nn.Module):
 
 
 MODEL = DeepfakeEfficientNet()
+model_load_start = time.perf_counter()
 
 if not MODEL_PATH.exists():
     raise FileNotFoundError(f"Model file not found at: {MODEL_PATH}")
@@ -59,9 +69,14 @@ MODEL.load_state_dict(checkpoint, strict=True)
 
 MODEL = MODEL.to(DEVICE)
 MODEL.eval()
+total = sum(p.numel() for p in MODEL.parameters())
+model_load_ms = (time.perf_counter() - model_load_start) * 1000
+print(f"[INFO] Model parameters: {total:,}")
+print(f"[INFO] Model loaded from {MODEL_PATH} in {model_load_ms:.2f} ms")
 PREPROCESS = transforms.Compose([
     transforms.Resize((224, 224)),
     transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 ])
 
 # Keep inference deterministic.
@@ -103,35 +118,27 @@ def save_analysis_request(request_id: str, timestamp: str, result: str, confiden
 
 init_database()
 
-@app.after_request
-def add_cors_headers(response):
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
-    response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
-    return response
-
 
 def predict_image(image: Image.Image):
     image_tensor = PREPROCESS(image).unsqueeze(0).to(DEVICE)
-
     with torch.no_grad():
         logits = MODEL(image_tensor)
-        if logits.shape[1] == 1:
-            fake_probability = torch.sigmoid(logits)
-            probabilities = torch.cat((1.0 - fake_probability, fake_probability), dim=1)
-        else:
-            probabilities = torch.nn.functional.softmax(logits, dim=1)
-
-    predicted_class = int(torch.argmax(probabilities, dim=1).item())
-    confidence = float(probabilities[0, predicted_class].item()) * 100.0
-    result = CLASS_NAMES[predicted_class]
-
-    return result, float(round(confidence, 2))
+        fake_probability = torch.sigmoid(logits).item()
+    if fake_probability > 0.5:
+        result = "Fake"
+        confidence = round(fake_probability * 100, 2)
+    else:
+        result = "Real"
+        confidence = round((1 - fake_probability) * 100, 2)
+    print(f"[DEBUG] fake_probability: {fake_probability:.4f}")
+    print(f"[DEBUG] raw fake_probability: {fake_probability:.4f}, result: {result}, confidence: {confidence}")
+    return result, confidence
 
 
 @app.route("/predict", methods=["POST", "OPTIONS"])
-@limiter.limit("10 per minute", methods=["POST"])
+@limiter.limit("100 per minute", methods=["POST"])
 def predict():
+    inference_start = time.perf_counter()
     if request.method == "OPTIONS":
         return ("", 204)
 
@@ -161,11 +168,15 @@ def predict():
         request_id = str(uuid.uuid4())
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         save_analysis_request(request_id, timestamp, result, confidence)
-    except (UnidentifiedImageError, OSError):
+    except (UnidentifiedImageError, OSError) as e:
+        print(f"[ERROR] {str(e)}")
         return jsonify({"error": "Invalid image file"}), 400
-    except Exception:
+    except Exception as e:
+        print(f"[ERROR] {str(e)}")
         return jsonify({"error": "Prediction failed"}), 500
 
+    inference_ms = (time.perf_counter() - inference_start) * 1000
+    print(f"[INFO] Inference request completed in {inference_ms:.2f} ms")
     return jsonify({
         "request_id": request_id,
         "result": result,

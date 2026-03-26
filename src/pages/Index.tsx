@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { Shield, Upload, FileText, AlertTriangle } from "lucide-react";
+import DeepfakeDetector from "@/components/DeepfakeDetector";
 
 const Index = () => {
   return (
@@ -45,6 +46,10 @@ const Index = () => {
             </div>
           ))}
         </div>
+      </div>
+
+      <div className="mx-auto max-w-4xl px-4 pb-20">
+        <DeepfakeDetector />
       </div>
 
       {/* Footer */}

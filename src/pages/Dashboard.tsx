@@ -1,12 +1,12 @@
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { logout } from "@/lib/auth";
-import { runDummyPrediction, type PredictionResult } from "@/lib/prediction";
+import { detectDeepfake, type PredictionResult } from "@/lib/prediction";
 import { generateReport } from "@/lib/report";
 import { Shield, Upload, LogOut, FileText, AlertTriangle, CheckCircle, XCircle, Image as ImageIcon } from "lucide-react";
 
-const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/jpg"];
+const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/jpg", "image/webp"];
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -16,14 +16,16 @@ const Dashboard = () => {
   const [result, setResult] = useState<PredictionResult | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
 
   if (loading) return <div className="flex min-h-screen items-center justify-center bg-background"><div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>;
   if (!user) { navigate("/login"); return null; }
 
   const handleFile = (f: File) => {
-    if (!ACCEPTED_TYPES.includes(f.type)) { alert("Please upload a JPG or PNG image only."); return; }
+    if (!ACCEPTED_TYPES.includes(f.type)) { alert("Please upload a JPG, PNG, or WEBP image only."); return; }
     setFile(f);
     setResult(null);
+    setAnalysisError(null);
     const reader = new FileReader();
     reader.onload = (e) => setPreview(e.target?.result as string);
     reader.readAsDataURL(f);
@@ -36,9 +38,39 @@ const Dashboard = () => {
     if (f) handleFile(f);
   };
 
-  const analyze = () => {
+  const getConfidenceExplanation = (probability: number, isFake: boolean): string => {
+    if (isFake) {
+      if (probability >= 85) return "Very high confidence - strong manipulation indicators detected.";
+      if (probability >= 65) return "Moderate confidence - multiple deepfake artifacts detected.";
+      return "Low confidence - some manipulation signals were detected.";
+    }
+    if (probability >= 85) return "Very high confidence - image appears authentic.";
+    if (probability >= 65) return "Moderate confidence - image appears mostly authentic.";
+    return "Low confidence - authenticity is likely but not definitive.";
+  };
+
+  const analyze = async () => {
+    if (!file) return;
+
     setAnalyzing(true);
-    setTimeout(() => { setResult(runDummyPrediction()); setAnalyzing(false); }, 1500);
+    setAnalysisError(null);
+
+    try {
+      const detection = await detectDeepfake(file);
+      const probability = Number(detection.confidence || 0);
+      const label: PredictionResult["label"] = detection.is_fake ? "Fake" : "Real";
+
+      setResult({
+        label,
+        probability,
+        confidence: getConfidenceExplanation(probability, detection.is_fake),
+      });
+    } catch (error) {
+      setResult(null);
+      setAnalysisError(error instanceof Error ? error.message : "Analysis failed");
+    } finally {
+      setAnalyzing(false);
+    }
   };
 
   const handleLogout = async () => {
@@ -46,7 +78,7 @@ const Dashboard = () => {
     navigate("/login");
   };
 
-  const clearImage = () => { setFile(null); setPreview(null); setResult(null); };
+  const clearImage = () => { setFile(null); setPreview(null); setResult(null); setAnalysisError(null); };
 
   return (
     <div className="min-h-screen bg-background">
@@ -91,10 +123,10 @@ const Dashboard = () => {
               >
                 <Upload className="mb-3 h-10 w-10 text-muted-foreground" />
                 <p className="mb-1 text-sm font-medium text-foreground">Drag & drop your image here</p>
-                <p className="mb-4 text-xs text-muted-foreground">Supports JPG and PNG files</p>
+                <p className="mb-4 text-xs text-muted-foreground">Supports JPG, PNG and WEBP files</p>
                 <label className="cursor-pointer rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90">
                   Browse Files
-                  <input type="file" accept=".jpg,.jpeg,.png" className="hidden" onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])} />
+                  <input type="file" accept=".jpg,.jpeg,.png,.webp" className="hidden" onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])} />
                 </label>
               </div>
             ) : (
@@ -110,6 +142,11 @@ const Dashboard = () => {
                     </div>
                   )}
                 </div>
+                {analysisError ? (
+                  <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                    {analysisError}
+                  </div>
+                ) : null}
                 <div className="flex items-center justify-between">
                   <p className="truncate text-xs text-muted-foreground">{file?.name}</p>
                   <div className="flex gap-2">

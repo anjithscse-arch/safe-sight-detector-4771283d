@@ -1,6 +1,6 @@
 import { useState, useEffect, createContext, useContext, type ReactNode } from "react";
 import { supabase } from "@/lib/supabase";
-import type { User } from "@/lib/auth";
+import { getCurrentUser, type User } from "@/lib/auth";
 
 interface AuthContextType {
   user: User | null;
@@ -14,6 +14,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const refreshUser = async () => {
+      const current = await getCurrentUser();
+      setUser(current);
+      setLoading(false);
+    };
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         setUser({
@@ -21,22 +27,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           email: session.user.email || "",
         });
       } else {
-        setUser(null);
+        // Covers local fallback auth session when Supabase has no active session.
+        void refreshUser();
       }
       setLoading(false);
     });
 
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session?.user) {
-        setUser({
-          username: data.session.user.user_metadata?.username || data.session.user.email?.split("@")[0] || "User",
-          email: data.session.user.email || "",
-        });
-      }
-      setLoading(false);
-    });
+    const onLocalAuthChanged = () => {
+      void refreshUser();
+    };
 
-    return () => subscription.unsubscribe();
+    window.addEventListener("auth-changed", onLocalAuthChanged);
+
+    void refreshUser();
+
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener("auth-changed", onLocalAuthChanged);
+    };
   }, []);
 
   return <AuthContext.Provider value={{ user, loading }}>{children}</AuthContext.Provider>;
