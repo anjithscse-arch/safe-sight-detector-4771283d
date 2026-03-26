@@ -36,3 +36,5 @@ dist-ssr
 *.sln
 *.sw?
 .env
+dataset/
+raw_dataset/

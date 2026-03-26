@@ -4,9 +4,6 @@ from PIL import Image, UnidentifiedImageError
 from pathlib import Path
 import time
 import torch
-import timm
-import torch.nn as nn
-from torchvision import transforms
 import sqlite3
 from datetime import datetime
 import uuid
@@ -14,6 +11,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
 from detection import detection_bp
+from model_utils import get_runtime
 
 load_dotenv()
 
@@ -28,56 +26,17 @@ ALLOWED_MIME_TYPES = {"image/jpeg", "image/png"}
 MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024
 
 # Load model and transforms one time at startup.
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-MODEL_PATH = Path("models/best_model.pth")
 DB_PATH = Path("database.db")
+runtime = get_runtime()
+DEVICE = runtime["device"]
+MODEL_PATH = runtime["model_path"]
 print(f"[INFO] Using device: {DEVICE}")
-
-
-class DeepfakeEfficientNet(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.backbone = timm.create_model("efficientnet_b0", pretrained=False, num_classes=0)
-        self.classifier = nn.Sequential(
-            nn.Dropout(0.3),
-            nn.Linear(1280, 512),
-            nn.ReLU(),
-            nn.Dropout(0.2),
-            nn.Linear(512, 1),
-        )
-
-    def forward(self, x):
-        features = self.backbone(x)
-        return self.classifier(features)
-
-
-MODEL = DeepfakeEfficientNet()
-model_load_start = time.perf_counter()
-
-if not MODEL_PATH.exists():
-    raise FileNotFoundError(f"Model file not found at: {MODEL_PATH}")
-
-checkpoint = torch.load(MODEL_PATH, map_location=DEVICE)
-if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
-    checkpoint = checkpoint["model_state_dict"]
-if isinstance(checkpoint, dict) and "state_dict" in checkpoint:
-    checkpoint = checkpoint["state_dict"]
-if isinstance(checkpoint, dict):
-    checkpoint = {k.replace("module.", ""): v for k, v in checkpoint.items()}
-
-MODEL.load_state_dict(checkpoint, strict=True)
-
-MODEL = MODEL.to(DEVICE)
-MODEL.eval()
-total = sum(p.numel() for p in MODEL.parameters())
-model_load_ms = (time.perf_counter() - model_load_start) * 1000
+MODEL = runtime["model"]
+PREPROCESS = runtime["preprocess"]
+total = runtime["total_params"]
+model_load_ms = runtime["load_ms"]
 print(f"[INFO] Model parameters: {total:,}")
 print(f"[INFO] Model loaded from {MODEL_PATH} in {model_load_ms:.2f} ms")
-PREPROCESS = transforms.Compose([
-    transforms.Resize((224, 224)),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-])
 
 # Keep inference deterministic.
 torch.manual_seed(42)
@@ -185,4 +144,4 @@ def predict():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    app.run(debug=False, host="0.0.0.0", port=5000)

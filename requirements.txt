@@ -5,6 +5,5 @@ torch
 timm
 torchvision
 flask-limiter
-httpx
 python-dotenv
 python-multipart

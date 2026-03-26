@@ -105,14 +105,14 @@ export default function DeepfakeDetector() {
 
           <p className="mt-2 text-sm text-foreground">Confidence: {confidence.toFixed(2)}%</p>
           <div className="mt-2">
-            {result.source === "local_model" ? (
+            {result.source === "local_model" || result.source === "efficientnet_b0" ? (
               <span className="inline-flex rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground">
-                {"\u{1F5A5}\uFE0F"} Local Model
+                {"\u{1F5A5}\uFE0F"} EfficientNet-B0
               </span>
             ) : null}
-            {result.source === "huggingface" ? (
+            {result.source === "huggingface_local" ? (
               <span className="inline-flex rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground">
-                {"\u{1F917}"} HuggingFace API
+                {"\u{1F917}"} HuggingFace Local
               </span>
             ) : null}
           </div>
