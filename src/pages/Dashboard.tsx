@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { logout } from "@/lib/auth";
+import { logoutUser } from "@/lib/auth";
 import { detectDeepfake, type PredictionResult } from "@/lib/prediction";
 import { generateReport } from "@/lib/report";
 import { Shield, Upload, LogOut, FileText, AlertTriangle, CheckCircle, XCircle, Image as ImageIcon } from "lucide-react";
@@ -74,7 +74,7 @@ const Dashboard = () => {
   };
 
   const handleLogout = async () => {
-    await logout();
+    await logoutUser();
     navigate("/login");
   };
 

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { register } from "@/lib/auth";
+import { registerUser } from "@/lib/auth";
 import { Shield, Eye, EyeOff } from "lucide-react";
 
 const Register = () => {
@@ -19,11 +19,11 @@ const Register = () => {
     if (password.length < 6) { setError("Password must be at least 6 characters."); return; }
     if (password !== confirmPassword) { setError("Passwords do not match."); return; }
     setLoading(true);
-    const result = await register(username, email, password);
-    if (result.success) {
+    try {
+      await registerUser(email, password, username);
       navigate("/login");
-    } else {
-      setError(result.error || "Registration failed.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Registration failed.");
     }
     setLoading(false);
   };

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { login } from "@/lib/auth";
+import { loginUser } from "@/lib/auth";
 import { Shield, Eye, EyeOff } from "lucide-react";
 
 const Login = () => {
@@ -15,11 +15,11 @@ const Login = () => {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const result = await login(email, password);
-    if (result.success) {
+    try {
+      await loginUser(email, password);
       navigate("/dashboard");
-    } else {
-      setError(result.error || "Login failed.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Login failed.");
     }
     setLoading(false);
   };

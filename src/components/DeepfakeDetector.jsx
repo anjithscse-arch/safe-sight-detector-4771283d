@@ -39,7 +39,7 @@ export default function DeepfakeDetector() {
     formData.append("file", image);
 
     try {
-      const response = await fetch("http://localhost:5000/api/detect", {
+      const response = await fetch("/api/detect", {
         method: "POST",
         body: formData,
       });
